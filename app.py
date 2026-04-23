@@ -6,6 +6,7 @@ from src.baseline_build import build_baseline_from_sec
 from src.dcf_mc import Params, simulate, summarize
 from src.price_live import get_price
 from src.cik_lookup import ticker_to_cik10
+from src.implied import implied_wacc, implied_growth
 
 st.set_page_config(page_title="Live SEC Monte Carlo DCF", layout="wide")
 st.title("Live SEC‑Based Monte Carlo DCF Valuation (Any Ticker)")
