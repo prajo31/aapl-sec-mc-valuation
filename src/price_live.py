@@ -3,47 +3,49 @@ from __future__ import annotations
 import time
 import json
 from pathlib import Path
-from io import StringIO
 from typing import Optional, Tuple
 
 import pandas as pd
-import requests
 
 CACHE_FILE = Path("price_cache.json")
 
+def _cache_write(price: float, date: str) -> None:
+    CACHE_FILE.write_text(json.dumps({"price": price, "date": date, "timestamp": time.time()}))
 
-def fetch_stooq_daily(symbol: str = "aapl.us", timeout: int = 20) -> Tuple[float, str]:
+def _cache_read() -> Tuple[Optional[float], Optional[str]]:
+    if not CACHE_FILE.exists():
+        return None, None
+    c = json.loads(CACHE_FILE.read_text())
+    return c.get("price"), c.get("date")
+
+def fetch_yfinance_price(symbol: str = "AAPL") -> Tuple[float, str]:
     """
-    Fetch daily price data from Stooq and return (close, date).
+    Fetch latest available close via yfinance history (more reliable than .info in many cases).
     """
-    url = f"https://stooq.com/q/d/l/?s={symbol}&i=d"
-    response = requests.get(url, timeout=timeout)
-    response.raise_for_status()
+    import yfinance as yf  # imported here so app still loads if dependency isn't installed yet
 
-    df = pd.read_csv(StringIO(response.text))
-    df = df.dropna()
-
-    last_row = df.iloc[-1]
-    return float(last_row["Close"]), str(last_row["Date"])
-
+    t = yf.Ticker(symbol)
+    hist = t.history(period="5d", interval="1d")  # last few daily bars
+    if hist is None or hist.empty:
+        raise RuntimeError("yfinance returned empty history")
+    last_idx = hist.index[-1]
+    last_close = float(hist["Close"].iloc[-1])
+    return last_close, str(last_idx.date())
 
 def get_price(symbol: str = "aapl.us") -> Tuple[Optional[float], Optional[str], str]:
     """
-    Try to fetch live price; if it fails, fall back to cached value.
-    Returns (price, date, status).
+    Primary: yfinance (AAPL)
+    Fallback: cached value
     """
+    # map stooq-style "aapl.us" to yfinance "AAPL"
+    yf_symbol = "AAPL" if symbol.lower().startswith("aapl") else symbol.upper().split(".")[0]
+
     try:
-        price, date = fetch_stooq_daily(symbol)
-        CACHE_FILE.write_text(
-            json.dumps(
-                {"price": price, "date": date, "timestamp": time.time()}
-            )
-        )
-        return price, date, "live"
-
+        price, date = fetch_yfinance_price(yf_symbol)
+        _cache_write(price, date)
+        return price, date, "live_yfinance"
     except Exception:
-        if CACHE_FILE.exists():
-            cached = json.loads(CACHE_FILE.read_text())
-            return cached.get("price"), cached.get("date"), "cached"
-
+        price, date = _cache_read()
+        if price is not None:
+            return price, date, "cached"
         return None, None, "unavailable"
