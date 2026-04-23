@@ -5,7 +5,7 @@ import requests
 from typing import Any, Dict, List, Optional, Tuple
 
 SEC_BASE = "https://data.sec.gov"
-AAPL_CIK10 = "0000320193"  # Apple CIK padded to 10 digits
+DEFAULT_CIK10 = "0000320193"  # Apple default
 
 def _sec_get_json(url: str, user_agent: str, timeout: int = 30) -> Dict[str, Any]:
     """
@@ -21,18 +21,13 @@ def _sec_get_json(url: str, user_agent: str, timeout: int = 30) -> Dict[str, Any
     return r.json()
 
 def fetch_submissions(cik10: str, user_agent: str) -> Dict[str, Any]:
-    """
-    Fetches filing history metadata (Submissions endpoint).
-    """
     url = f"{SEC_BASE}/submissions/CIK{cik10}.json"
     return _sec_get_json(url, user_agent=user_agent)
 
 def fetch_companyfacts(cik10: str, user_agent: str) -> Dict[str, Any]:
-    """
-    Fetches all XBRL facts for the company (CompanyFacts endpoint).
-    """
     url = f"{SEC_BASE}/api/xbrl/companyfacts/CIK{cik10}.json"
     return _sec_get_json(url, user_agent=user_agent)
+``
 
 def pick_series(companyfacts: Dict[str, Any], taxonomy: str, tag: str, unit: str) -> List[Dict[str, Any]]:
     """
