@@ -1,4 +1,3 @@
-# src/price_live.py
 from __future__ import annotations
 
 import time
@@ -10,32 +9,41 @@ from typing import Optional, Tuple
 import pandas as pd
 import requests
 
-CACHE = Path("price_cache.json")
+CACHE_FILE = Path("price_cache.json")
 
-def fetch_stooq_daily_close(symbol: str = "aapl.us", timeout: int = 20) -> Tuple[float, str]:
+
+def fetch_stooq_daily(symbol: str = "aapl.us", timeout: int = 20) -> Tuple[float, str]:
     """
-    Fetch daily OHLCV from Stooq as CSV and return latest Close and Date.
+    Fetch daily price data from Stooq and return (close, date).
     """
     url = f"https://stooq.com/q/d/l/?s={symbol}&i=d"
-    r = requests.get(url, timeout=timeout)
-    r.raise_for_status()
-    df = pd.read_csv(StringIO(r.text)).dropna()
-    last = df.iloc[-1]
-    return float(last["Close"]), str(last["Date"])
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+
+    df = pd.read_csv(StringIO(response.text))
+    df = df.dropna()
+
+    last_row = df.iloc[-1]
+    return float(last_row["Close"]), str(last_row["Date"])
+
 
 def get_price(symbol: str = "aapl.us") -> Tuple[Optional[float], Optional[str], str]:
     """
-    Try live fetch; if it fails, return cached fallback.
+    Try to fetch live price; if it fails, fall back to cached value.
     Returns (price, date, status).
     """
-    now = time.time()
     try:
-        close, date = fetch_stooq_daily_close(symbol=symbol)
-        CACHE.write_text(json.dumps({"close": close, "date": date, "t": now}))
-        return close, date, "live"
+        price, date = fetch_stooq_daily(symbol)
+        CACHE_FILE.write_text(
+            json.dumps(
+                {"price": price, "date": date, "timestamp": time.time()}
+            )
+        )
+        return price, date, "live"
+
     except Exception:
-        if CACHE.exists():
-            c = json.loads(CACHE.read_text())
-            return c.get("close"), c.get("date"), "cached_fallback"
+        if CACHE_FILE.exists():
+            cached = json.loads(CACHE_FILE.read_text())
+            return cached.get("price"), cached.get("date"), "cached"
+
         return None, None, "unavailable"
-``
